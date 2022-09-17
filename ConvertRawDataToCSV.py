@@ -18,6 +18,9 @@ import datetime
 import tkfilebrowser as fb
 import math
 
+import ProcessDataFunctions as dp
+import OptionsManager as om
+
 
 class ConverterWindow(QMainWindow):
     '''
@@ -54,44 +57,54 @@ class ConverterWindow(QMainWindow):
         '''
         Plot Options to Generate
         '''
-        plot_options_list = []
+        plot_options = om.OptionsManager()
         options_lbl = QLabel('Create File Types:')
         options_lbl.setFont(lbl_font)
         #IV 
         self.IV_plot_cb  = QCheckBox('Current,Voltage')
-        plot_options_list.append(self.IV_plot_cb)
+        plot_options['IV'] = self.IV_plot_cb
         
         #FV 
         self.FV_plot_cb  = QCheckBox('Force,Voltage')
-        plot_options_list.append(self.FV_plot_cb)
+        plot_options['FV'] = self.FV_plot_cb
+        
+        #BV 
+        self.BV_plot_cb  = QCheckBox('Force[balance],Voltage')
+        plot_options['BV'] = self.BV_plot_cb
         
         #AV
         self.AV_plot_cb  = QCheckBox('Anemometer,Voltage')
-        plot_options_list.append(self.AV_plot_cb)
+        plot_options['AV'] = self.AV_plot_cb
         
         #XYA
         self.XYA_plot_cb  = QCheckBox('X,Y,Anemometer')
-        plot_options_list.append(self.XYA_plot_cb)
+        plot_options['XYA'] = self.XYA_plot_cb
         
         #Decimated I vs Time
         self.IT_cb  = QCheckBox('Current,Time')
         self.IT_cb.setChecked(True)
-        plot_options_list.append(self.IT_cb)
+        plot_options['IT'] = self.IT_cb
         
         #Decimated V vs Time
         self.VT_cb  = QCheckBox('Voltage,Time')
         self.VT_cb.setChecked(True)
-        plot_options_list.append(self.VT_cb)
+        plot_options['VT'] = self.VT_cb
         
         #Decimated A vs Time
         self.AT_cb  = QCheckBox('Anemometer,Time')
         self.AT_cb.setChecked(True)
-        plot_options_list.append(self.AT_cb)
+        plot_options['AT'] = self.AT_cb
         
         #Force vs Time 
         self.FT_cb  = QCheckBox('Force,Time')
         self.FT_cb.setChecked(True)
-        plot_options_list.append(self.FT_cb)
+        plot_options['FT'] = self.FT_cb
+        
+        
+        self.decimate_lbl = QLabel('Reduce Large Data by ')
+        self.decimate_input = QLineEdit('1')
+        self.decimate_input.setValidator(QIntValidator(1, 10000))
+        self.decimate_input.setFixedWidth(40)
         
         '''
         Select Files
@@ -125,8 +138,13 @@ class ConverterWindow(QMainWindow):
         self.layout.addWidget(self.save_file_box,0,1,1,3)
         
         self.layout.addWidget(options_lbl,0,10,1,1)
-        for i in range(len(plot_options_list)):
-            self.layout.addWidget(plot_options_list[i],i+1,10,1,1)
+        bottom_row = 0
+        for i in range(plot_options.GetNumOptions()):
+            self.layout.addWidget(plot_options.options_list[i],i+1,10,1,1)
+            bottom_row = i+1
+        
+        self.layout.addWidget(self.decimate_lbl,bottom_row+1,10,1,1)
+        self.layout.addWidget(self.decimate_input,bottom_row+1,11,1,1)
         
         self.layout.addWidget(select_warning_lbl,1,0,2,4)
         self.layout.addWidget(self.sel_files_btn, 3, 1, 1, 1)
@@ -135,7 +153,7 @@ class ConverterWindow(QMainWindow):
         self.layout.addWidget(self.remove_files_btn,6,0,1,1)
         self.layout.addWidget(self.chosen_files_msg,7,0,10,10)
     def handleProcessBtn(self):
-        
+        #check if a filename has been specified, only save if so
         if self.checkFilename(self.save_file_box.text()):
             root = tk.Tk()
             root.withdraw()
@@ -143,7 +161,10 @@ class ConverterWindow(QMainWindow):
             root.resizable(False, False)
             root.geometry('300x150')
             save_directory = fd.askdirectory()
-            print('saving to '+ save_directory)
+            
+            #create data process object. This will avoid parsing files more than once
+            data_processor = dp.DataProcessor(int(self.decimate_input.text()))
+            
             
             
             #reset the chosen directories and corresponding GUI text

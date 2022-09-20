@@ -18,7 +18,7 @@ import datetime
 import tkfilebrowser as fb
 import math
 
-import ProcessDataFunctions as dp
+import CSVGenerator as gen
 import OptionsManager as om
 
 
@@ -57,48 +57,48 @@ class ConverterWindow(QMainWindow):
         '''
         Plot Options to Generate
         '''
-        plot_options = om.OptionsManager()
+        self.plot_options = om.OptionsManager()
         options_lbl = QLabel('Create File Types:')
         options_lbl.setFont(lbl_font)
         #IV 
         self.IV_plot_cb  = QCheckBox('Current,Voltage')
-        plot_options['IV'] = self.IV_plot_cb
+        self.plot_options.options['IV'] = self.IV_plot_cb
         
         #FV 
         self.FV_plot_cb  = QCheckBox('Force,Voltage')
-        plot_options['FV'] = self.FV_plot_cb
+        self.plot_options.options['FV'] = self.FV_plot_cb
         
         #BV 
         self.BV_plot_cb  = QCheckBox('Force[balance],Voltage')
-        plot_options['BV'] = self.BV_plot_cb
+        self.plot_options.options['BV'] = self.BV_plot_cb
         
         #AV
         self.AV_plot_cb  = QCheckBox('Anemometer,Voltage')
-        plot_options['AV'] = self.AV_plot_cb
+        self.plot_options.options['AV'] = self.AV_plot_cb
         
         #XYA
         self.XYA_plot_cb  = QCheckBox('X,Y,Anemometer')
-        plot_options['XYA'] = self.XYA_plot_cb
+        self.plot_options.options['XYA'] = self.XYA_plot_cb
         
         #Decimated I vs Time
         self.IT_cb  = QCheckBox('Current,Time')
         self.IT_cb.setChecked(True)
-        plot_options['IT'] = self.IT_cb
+        self.plot_options.options['IT'] = self.IT_cb
         
         #Decimated V vs Time
         self.VT_cb  = QCheckBox('Voltage,Time')
         self.VT_cb.setChecked(True)
-        plot_options['VT'] = self.VT_cb
+        self.plot_options.options['VT'] = self.VT_cb
         
         #Decimated A vs Time
         self.AT_cb  = QCheckBox('Anemometer,Time')
         self.AT_cb.setChecked(True)
-        plot_options['AT'] = self.AT_cb
+        self.plot_options.options['AT'] = self.AT_cb
         
         #Force vs Time 
         self.FT_cb  = QCheckBox('Force,Time')
         self.FT_cb.setChecked(True)
-        plot_options['FT'] = self.FT_cb
+        self.plot_options.options['FT'] = self.FT_cb
         
         
         self.decimate_lbl = QLabel('Reduce Large Data by ')
@@ -139,8 +139,8 @@ class ConverterWindow(QMainWindow):
         
         self.layout.addWidget(options_lbl,0,10,1,1)
         bottom_row = 0
-        for i in range(plot_options.GetNumOptions()):
-            self.layout.addWidget(plot_options.options_list[i],i+1,10,1,1)
+        for i in range(self.plot_options.GetNumOptions()):
+            self.layout.addWidget(self.plot_options.GetBox(i),i+1,10,1,1)
             bottom_row = i+1
         
         self.layout.addWidget(self.decimate_lbl,bottom_row+1,10,1,1)
@@ -161,16 +161,30 @@ class ConverterWindow(QMainWindow):
             root.resizable(False, False)
             root.geometry('300x150')
             save_directory = fd.askdirectory()
+            savefile = self.checkFilename(self.save_file_box.text())
             
-            #create data process object. This will avoid parsing files more than once
-            data_processor = dp.DataProcessor(int(self.decimate_input.text()))
-            
-            
-            
-            #reset the chosen directories and corresponding GUI text
-            self.chosen_dirs = () 
-            self.updateMsgText()
-            
+            if (save_directory != '') and (savefile != None):
+                
+                self.path = save_directory + '/' + savefile
+                # if file already exists, add increment to name to guarantee unique names
+                if os.path.exists(self.path):
+                    
+                    i=0
+                    test_path = self.path
+                    while os.path.exists(test_path):
+                        i=i+1
+                        test_path = self.path + ' (' + str(i) + ')'
+                    self.path = test_path
+                os.mkdir(self.path) 
+                
+                #create data process object. This will avoid parsing files more than once
+                generator = gen.CSVGenerator(self.chosen_dirs,self.path,self.plot_options,int(self.decimate_input.text()))
+                generator.run()
+                
+                #reset the chosen directories and corresponding GUI text
+                self.chosen_dirs = () 
+                self.updateMsgText()
+          
     def resetChosenDirs(self):
         self.chosen_dirs = ()
         self.updateMsgText()
@@ -200,7 +214,7 @@ class ConverterWindow(QMainWindow):
             msg.exec_()
             return False
         else:
-            return True
+            return name
     def updateMsgText(self):
         msg = ''
         dirs = self.chosen_dirs

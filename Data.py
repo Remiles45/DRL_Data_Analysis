@@ -13,3 +13,9 @@ class Data:
         self.process_method = process_method
         self.data = data
         self.timestamps = timestamps
+
+class CSVData:
+    def __init__(self,data,processing_func,header=None):
+        self.data = data
+        self.processing_func = processing_func
+        self.header = [header]

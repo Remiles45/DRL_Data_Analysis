@@ -7,22 +7,15 @@ Created on Fri Sep 16 11:02:57 2022
 import numpy as np
 import pandas as pd
 from os.path import exists
-from Data import Data
+from Data import Data,CSVData
 from scipy import ndimage
+import csv
+
 
 class DataProcessor:
-    def __init__(self,base_path=None,dec_factor=1):
+    def __init__(self,base_path,dec_factor=1):
         self.base_path = base_path
         self.dec_factor = dec_factor # reduce size of large files
-        
-        #idk if I will ever use this, but it might be nice to be able to identify a specific trial
-        self.trial_key = None
-        try:
-            path_parts = self.base_path.split('_T')
-            self.trial_key = path_parts[-1]
-        except:
-            print('Could not identify trial key for '+self.base_path)
-        
         
         self.voltage    = Data(self.base_path + '/Voltage Monitor.csv','Voltage',self.ProcessVoltage)
         self.current    = Data(self.base_path + '/Current Monitor.csv','Current',self.ProcessCurrent)
@@ -33,48 +26,29 @@ class DataProcessor:
         self.balance    = Data(self.base_path + '/Balance.csv','Balance',self.ProcessBalance)
         self.balance_v  = Data(self.base_path + '/Balance Voltages.csv','Balance Voltage',self.ProcessBalanceVoltage)
                 
-        self.generate_options = {
-            'IV'  : (self.current,self.voltage),
-            'FV'  : (self.force,self.voltage),
-            'BV'  : (self.balance,self.balance_v),
-            'AV'  : (self.anemometer,self.voltage),
-            'XYA' : (self.stage,self.anemometer),
-            'IT'  : (self.current),
-            'VT'  : (self.voltage),
-            'AT'  : (self.anemometer),
-            'FT'  : (self.force)            
-            }
-        
-        
-    def ProcessFile(self,options):
-        '''
-        This function will process all of the data for a single Trial 
-        ("File" is misleading, it is technically one directory with several files) 
-        Parameters
-        ----------
-        options : OptionsManager
-            class which stores all of the options for different types of CSV file to generate
-
-        Returns
-        -------
-        None.
-        '''
-        print('Generating Files....')
-        for key in options.options_list:
-            #if that option is selected
-            if options.GetState(key):
-                PASSED = True
-                #check all the required files to ensure they exist
-                for obj in self.generate_options[key]:
-                    if not exists(obj.filepath):
-                        print('Could not generate '+str(key)+' CSV due to missing files')
-                        PASSED = False
-                        break;
-                #if all files exist, proceed. 
-                if PASSED:
-                    pass
-       
-        
+        # self.generate_options = {
+        #     'IV'  : (self.current,self.voltage),
+        #     'FV'  : (self.force,self.voltage),
+        #     'BV'  : (self.balance,self.balance_v),
+        #     'AV'  : (self.anemometer,self.voltage),
+        #     'XYA' : (self.stage,self.anemometer),
+        #     'IT'  : (self.current),
+        #     'VT'  : (self.voltage),
+        #     'AT'  : (self.anemometer),
+        #     'FT'  : (self.force)
+        #     }
+              
+        # self.generate_options = {
+        #     'IV'  : self.IV,
+        #     'FV'  : self.FV,
+        #     'BV'  : self.BV,
+        #     'AV'  : self.AV,
+        #     'XYA' : self.XYA,
+        #     'IT'  : self.IT,
+        #     'VT'  : self.VT,
+        #     'AT'  : self.AT,
+        #     'FT'  : self.FT
+        #     }
         
         
         
@@ -106,7 +80,7 @@ class DataProcessor:
         '''
         #check if the anemometer has already been parsed
         if len(self.anemometer.data) == 0:
-            raw_anemometer , self.anemometer.timestamps = self.ParseFile(self.voltage.filepath,reduce=True)
+            raw_anemometer , self.anemometer.timestamps = self.ParseFile(self.anemometer.filepath,reduce=True)
             e0 = 0 #0 velocity signal
             if velocity_range == 7.5:
                 scalar = 1.5
@@ -116,7 +90,6 @@ class DataProcessor:
             filt_anemometer = ndimage.median_filter(raw_anemometer,size=5)
             # convert voltage to kV where vkv = (vsupplyout*kvmax)/vsupplymax
             self.anemometer.data = (((filt_anemometer-e0)*scalar)/(10-e0))*velocity_range
-
     def ProcessForce(self):
         #check if the force has already been parsed
         if len(self.force.data) == 0:
@@ -128,7 +101,14 @@ class DataProcessor:
             self.supply.data , self.supply.timestamps = self.ParseFile(self.supply.filepath)
     
     def ProcessXYStage(self):
-        pass
+        if len(self.stage.data) == 0:
+            xydata = []
+            xy_raw , self.stage.timestamps = self.ParseFile(self.stage.filepath)
+            for coord in xy_raw:
+                parsed = coord.split(' ')
+                xycoord = (float(parsed[0]),float(parsed[1]))
+                xydata.append(xycoord)
+            self.stage.data = np.array(xydata)
     
     def ProcessBalance(self):
         #check if the balance has already been parsed
@@ -198,3 +178,59 @@ class DataProcessor:
             return out_data,out_ts
         else:
             raise ValueError('Unrecognized File Format')
+            
+    def IV(self):
+        pass
+    def FV(self):
+        pass
+    def BV(self):
+        pass
+    def AV(self):
+        pass
+    def XYA(self,writer):
+        if exists(self.stage.filepath) and exists(self.anemometer.filepath):
+            #ensure the required data exists
+            self.ProcessAnemometer()
+            self.ProcessXYStage()
+            
+            # out = np.array([])
+            
+            #match up timestamps between the xy stage and anemometer
+            stationary_times = self.stage.timestamps[1:] - self.stage.timestamps[:-1]
+            min_stationary_time = 0.5 #amount of time that we know the stage will sit there to collect data before moving
+            extra_stabilizing_time = 0.1 #time to allow stabalization after movement
+            important_xy_indices = np.argwhere(stationary_times>min_stationary_time)
+            stationary_anem_data = []
+    
+            # write_file = self.destiation_path+'/XYA.csv'
+            # with open(write_file,mode='w',newline='') as f:
+                # writer = csv.writer(f, delimiter=',', quoting=csv.QUOTE_NONE)
+            for index in important_xy_indices:
+                xy = self.stage.data[index]
+                #create buffer for stabalizing time
+                start_stationary_time = self.stage.timestamps[index] + extra_stabilizing_time
+                end_stationary_time = self.stage.timestamps[index+1] - extra_stabilizing_time 
+                #gather anemometer data during the relevant timeframe
+                anem = self.anemometer.data[np.logical_and(self.anemometer.timestamps>start_stationary_time,self.anemometer.timestamps<end_stationary_time)]
+                
+                anem_avg = np.average(anem)
+                anem_std = np.std(anem)
+                print(anem_avg)
+                x = xy[0][0]
+                y = xy[0][1]
+                # row = [x,y,anem_avg,anem_std]
+                # out = np.append(out,row)
+                writer.writerow([x,y,anem_avg,anem_std])
+            # return out
+        else:
+            print('Could not generate XYA plot for '+self.base_path+ ' due to missing files')
+            # return False
+    def IT(self):
+        pass
+    def VT(self):
+        pass
+    def AT(self):
+        pass
+    def FT(self):
+        pass
+    

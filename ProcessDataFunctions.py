@@ -26,31 +26,6 @@ class DataProcessor:
         self.balance    = Data(self.base_path + '/Balance.csv','Balance',self.ProcessBalance)
         self.balance_v  = Data(self.base_path + '/Balance Voltages.csv','Balance Voltage',self.ProcessBalanceVoltage)
                 
-        # self.generate_options = {
-        #     'IV'  : (self.current,self.voltage),
-        #     'FV'  : (self.force,self.voltage),
-        #     'BV'  : (self.balance,self.balance_v),
-        #     'AV'  : (self.anemometer,self.voltage),
-        #     'XYA' : (self.stage,self.anemometer),
-        #     'IT'  : (self.current),
-        #     'VT'  : (self.voltage),
-        #     'AT'  : (self.anemometer),
-        #     'FT'  : (self.force)
-        #     }
-              
-        # self.generate_options = {
-        #     'IV'  : self.IV,
-        #     'FV'  : self.FV,
-        #     'BV'  : self.BV,
-        #     'AV'  : self.AV,
-        #     'XYA' : self.XYA,
-        #     'IT'  : self.IT,
-        #     'VT'  : self.VT,
-        #     'AT'  : self.AT,
-        #     'FT'  : self.FT
-        #     }
-        
-        
         
     def ProcessCurrent(self):
         #check if the current has already been parsed
@@ -90,6 +65,7 @@ class DataProcessor:
             filt_anemometer = ndimage.median_filter(raw_anemometer,size=5)
             # convert voltage to kV where vkv = (vsupplyout*kvmax)/vsupplymax
             self.anemometer.data = (((filt_anemometer-e0)*scalar)/(10-e0))*velocity_range
+            
     def ProcessForce(self):
         #check if the force has already been parsed
         if len(self.force.data) == 0:
@@ -119,7 +95,6 @@ class DataProcessor:
         #check if the balance voltage has already been parsed
         if len(self.balance_v.data) == 0:
             self.balance_v.data = self.ParseFile(self.balance_v.filepath)
-
     
     def DecimateData(self,in_data,in_ts):
         '''
@@ -171,29 +146,78 @@ class DataProcessor:
             timestamps = df['timestamps']
             file.close()
             out_data = np.array(data.values)
-            out_ts   = np.array(timestamps.values)
+            ts   = np.array(timestamps.values)
+            #convert timestamp time to be wrt beginning of experiment
+            out_ts = ts - ts[0] 
             #decimate the data if necessary
             if reduce and (self.dec_factor>1):
                 out_data,out_ts = self.DecimateData(out_data,out_ts)
             return out_data,out_ts
         else:
             raise ValueError('Unrecognized File Format')
-            
+    # def AlignTimestamps(self,obj1,obj2,thresh=0.001):
+    #     '''
+    #     Goes through two datasets and matches the datapoints of each with respect to time
+    #     Uses a threshold to match timestamps (two timesstamps at effectively the same time may not be identical)
+    #     Inputs:
+    #         obj1 : data object
+    #         obj2 : data object
+    #     Outputs:
+    #         out1_data : numpy array
+    #         out2_data : numpy array
+    #     '''
+        
+        
     def IV(self):
-        pass
+        if exists(self.current.filepath) and exists(self.voltage.filepath):
+            #ensure the required data exists
+            self.ProcessVoltage()
+            self.ProcessCurrent()
+            
+            #Both data are coming from the oscilloscope, therefore there should be the same number of datapoints
+            #and all of those datapoints should have aligning timestamps.
+            return self.current.data,self.voltage.data
+        else:
+            print('Could not generate IV plot for '+self.base_path+ ' due to missing files')
     def FV(self):
-        pass
+        if exists(self.force.filepath) and exists(self.voltage.filepath):
+            #ensure the required data exists
+            self.ProcessVoltage() 
+            self.ProcessForce()
+            
+        else:
+            print('Could not generate FV plot for '+self.base_path+ ' due to missing files')
     def BV(self):
-        pass
+        if exists(self.balance.filepath) and exists(self.balance_v.filepath):
+            #ensure the required data exists
+            self.ProcessBalanceVoltage()    
+            self.ProcessBalance()
+            
+            #Both data are designed to match up, these files do not actually have timestamps to align anyways
+            return self.balance.data,self.balance_v.data
+        else:
+            print('Could not generate BV plot for '+self.base_path+ ' due to missing files')
     def AV(self):
-        pass
-    def XYA(self,writer):
+        if exists(self.anemometer.filepath) and exists(self.voltage.filepath):
+            #ensure the required data exists
+            self.ProcessVoltage()     
+            self.ProcessAnemometer()
+            
+            #Both data are coming from the oscilloscope, therefore there should be the same number of datapoints
+            #and all of those datapoints should have aligning timestamps.
+            return self.anemometer.data,self.voltage.data
+        else:
+            print('Could not generate AV plot for '+self.base_path+ ' due to missing files')
+    def XYA(self,writer=None):
         if exists(self.stage.filepath) and exists(self.anemometer.filepath):
             #ensure the required data exists
             self.ProcessAnemometer()
             self.ProcessXYStage()
             
-            # out = np.array([])
+            out_x = np.array([])
+            out_y = np.array([])
+            out_anem_avg = np.array([])
+            out_anem_std = np.array([])
             
             #match up timestamps between the xy stage and anemometer
             stationary_times = self.stage.timestamps[1:] - self.stage.timestamps[:-1]
@@ -202,9 +226,6 @@ class DataProcessor:
             important_xy_indices = np.argwhere(stationary_times>min_stationary_time)
             stationary_anem_data = []
     
-            # write_file = self.destiation_path+'/XYA.csv'
-            # with open(write_file,mode='w',newline='') as f:
-                # writer = csv.writer(f, delimiter=',', quoting=csv.QUOTE_NONE)
             for index in important_xy_indices:
                 xy = self.stage.data[index]
                 #create buffer for stabalizing time
@@ -218,19 +239,45 @@ class DataProcessor:
                 print(anem_avg)
                 x = xy[0][0]
                 y = xy[0][1]
-                # row = [x,y,anem_avg,anem_std]
-                # out = np.append(out,row)
-                writer.writerow([x,y,anem_avg,anem_std])
-            # return out
+                if writer == None:
+                    out_x = np.append(out_x,x)
+                    out_y = np.append(out_y,y)
+                    out_anem_avg = np.append(out_anem_avg,anem_avg)
+                    out_anem_std = np.append(out_anem_std,anem_std)
+                else:
+                    writer.writerow([x,y,anem_avg,anem_std])
+                
+                if writer == None:
+                    return out_x,out_y,out_anem_avg,out_anem_std
         else:
             print('Could not generate XYA plot for '+self.base_path+ ' due to missing files')
-            # return False
     def IT(self):
-        pass
+        if exists(self.current.filepath):
+            #ensure that the required data exists
+            self.ProcessCurrent()
+            return self.current.data,self.current.timestamps  
+        else:
+            print('Could not generate IT plot for '+self.base_path+ ' due to missing files')         
+            
     def VT(self):
-        pass
+        if exists(self.voltage.filepath):
+            #ensure that the required data exists
+            self.ProcessVoltage()
+            return self.voltage.data,self.voltage.timestamps 
+        else:
+            print('Could not generate VT plot for '+self.base_path+ ' due to missing files')    
     def AT(self):
-        pass
+        if exists(self.anemometer.filepath):
+            #ensure that the required data exists
+            self.ProcessAnemometer()
+            return self.anemometer.data,self.anemometer.timestamps    
+        else:
+            print('Could not generate AT plot for '+self.base_path+ ' due to missing files')
     def FT(self):
-        pass
+        if exists(self.force.filepath):
+            #ensure that the required data exists
+            self.ProcessForce()
+            return self.force.data,self.force.timestamps   
+        else:
+            print('Could not generate FT plot for '+self.base_path+ ' due to missing files') 
     

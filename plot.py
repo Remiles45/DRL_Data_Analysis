@@ -9,16 +9,44 @@ import matplotlib.pyplot as mpl
 import pandas as pd
 import numpy as np
 
-path = '../junk/test (6)/XYA.csv'
+base_pathiv = '../ExperimentalData/Junk/testiv'
+base_pathxy = '../ExperimentalData/Junk/testxy'
 
-df = pd.read_csv(path,skiprows=1,header=None)
-df.columns=['x','y','anem','std_dev']
+iv_path  = base_pathiv + 'IV.csv'
+fv_path  = base_pathiv + 'FV.csv'
+bv_path  = base_pathiv + 'BV.csv'
+av_path  = base_pathiv + 'AV.csv'
+xya_path = base_pathxy + 'XYA.csv'
+it_path  = base_pathiv + 'IV.csv'
+vt_path  = base_pathiv + 'VT.csv'
+at_path  = base_pathxy + 'AT.csv'
+ft_path  = base_pathiv + 'FT.csv'
 
-x = np.array(df['x'].values)
-y = np.array(df['y'].values)
-a = np.array(df['anem'].values)
-sdev=np.array(df['std_dev'].values)
 
-fig = mpl.figure()
-ax = fig.add_subplot(projection='3d')
-ax.scatter(x,y,a)
+
+
+def plotXYA(path):
+    df = pd.read_csv(path,skiprows=1,header=None)
+    df.columns=['x','y','anem','std_dev']
+    
+    x = np.array(df['x'].values)
+    y = np.array(df['y'].values)
+    a = np.array(df['anem'].values)
+    sdev=np.array(df['std_dev'].values)
+    
+    fig = mpl.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.scatter(x,y,a)
+    
+def plot2D(path,ttl=''):
+    df = pd.read_csv(path,skiprows=1,header=None)
+    df.columns=['x','y']
+    
+    x = np.array(df['x'].values)
+    y = np.array(df['y'].values)
+    
+    fig = mpl.figure()
+    ax = fig.add_subplot()
+    ax.scatter(x,y)
+    
+    

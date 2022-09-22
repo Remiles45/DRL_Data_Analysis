@@ -36,7 +36,8 @@ class ConverterWindow(QMainWindow):
         '''
         Window Settings
         '''
-        self.setMinimumSize(QSize(410, 200))    
+        self.setMinimumSize(QSize(500, 300)) 
+        self.setMaximumSize(QSize(1000,1000))
         self.setWindowTitle("Raw Data Converter") 
         
         self.window = QWidget()
@@ -154,7 +155,7 @@ class ConverterWindow(QMainWindow):
         self.layout.addWidget(self.chosen_files_msg,7,0,10,10)
     def handleProcessBtn(self):
         #check if a filename has been specified, only save if so
-        if self.checkFilename(self.save_file_box.text()):
+        if self.checkFilename(self.save_file_box.text(),bool_out=True) and self.checkDataSelection():
             root = tk.Tk()
             root.withdraw()
             root.title('Tkinter File Dialog')
@@ -176,11 +177,11 @@ class ConverterWindow(QMainWindow):
                         test_path = self.path + ' (' + str(i) + ')'
                     self.path = test_path
                 os.mkdir(self.path) 
-                
+                print('Generating Files for '+self.path)
                 #create data process object. This will avoid parsing files more than once
                 generator = gen.CSVGenerator(self.chosen_dirs,self.path,self.plot_options,int(self.decimate_input.text()))
                 generator.run()
-                
+                print('Finished')
                 #reset the chosen directories and corresponding GUI text
                 self.chosen_dirs = () 
                 self.updateMsgText()
@@ -200,7 +201,7 @@ class ConverterWindow(QMainWindow):
             self.updateMsgText()
         else:
             return
-    def checkFilename(self,name):
+    def checkFilename(self,name,bool_out=False):
         '''
         check to ensure the user has entered a valid name to save the data to 
         when they run an experiment. Throw error if no name has been entered
@@ -214,7 +215,26 @@ class ConverterWindow(QMainWindow):
             msg.exec_()
             return False
         else:
-            return name
+            if bool_out:
+                return True
+            else:
+                return name
+    
+    def checkDataSelection(self):
+        '''
+        check to ensure the user has entered a valid name to save the data to 
+        when they run an experiment. Throw error if no name has been entered
+        '''
+        if self.chosen_dirs == ():
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error")
+            msg.setInformativeText("Must select files to process")
+            msg.setWindowTitle("Error")
+            msg.exec_()
+            return False
+        else:
+            return True    
     def updateMsgText(self):
         msg = ''
         dirs = self.chosen_dirs
@@ -232,46 +252,8 @@ class ConverterWindow(QMainWindow):
         # Adjust the GUI size to display full filepaths
         w = self.window.sizeHint().width() 
         h = self.window.sizeHint().height() 
-        self.setFixedSize(w, h)
-            
-    def Save(self):  
-        '''
-        Save recorded data
-        '''
-        time.sleep(1)
-        print('Saving Data....')
-        # Go through each device that has been connected, retrieve the data recorded 
-        # from each and write it to a file
-        # for w in self.all_widgets:
-        #     lbl = ''
-        #     data = []
-        #     timestamps = []
-        #     unit = ''
-        #     extra_info = ''
-        #     lbl,data,timestamps,unit,extra_info = w.getRecording()
-        #     self.writeToFile(lbl, data, timestamps, unit, extra_info)
-
-        print('Done Saving')
-        
-    def writeToFile(self,lbl,data,timestamps,unit,extra_info):   
-        '''
-        This function is what physically writes the text into each saved file. 
-        '''         
-        filename = lbl + '.csv'
-        self.full_path = self.path + '/' + filename
-        with open(self.full_path, mode='w',newline='') as f:
-            writer = csv.writer(f, delimiter=',', quoting=csv.QUOTE_NONE)
-            #make header, first 3 lines of the file are always header info
-            writer.writerow([lbl])
-            writer.writerow([unit])
-            writer.writerow([extra_info])
-            # write each datapoint with its associated timestamp
-            for i in range(len(data)):
-                d = data[i]
-                ts = timestamps[i]
-                writer.writerow([d, ts])      
-    
-        
+        # self.setFixedSize(w, h)
+        self.resize(w, h)
     def closeEvent(self,event):
         pass
 if __name__ == "__main__":

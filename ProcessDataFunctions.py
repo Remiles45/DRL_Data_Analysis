@@ -82,14 +82,16 @@ class DataProcessor:
             xy_raw , self.stage.timestamps = self.ParseFile(self.stage.filepath)
             for coord in xy_raw:
                 parsed = coord.split(' ')
-                xycoord = (float(parsed[0]),float(parsed[1]))
+                xycoord = (float(parsed[0])/1000,float(parsed[1])/1000)#convert um to mm
                 xydata.append(xycoord)
             self.stage.data = np.array(xydata)
     
     def ProcessBalance(self):
         #check if the balance has already been parsed
         if len(self.balance.data) == 0:
-            self.balance.data = self.ParseFile(self.balance.filepath)
+            raw_balance = self.ParseFile(self.balance.filepath)
+            baseline = raw_balance[0]
+            self.balance.data = (raw_balance-baseline) * 9.81 * 1e-3 #mg to kg = 1e-6, N to mN = 1e3 end result is 1e-3
     
     def ProcessBalanceVoltage(self):
         #check if the balance voltage has already been parsed
@@ -155,19 +157,7 @@ class DataProcessor:
             return out_data,out_ts
         else:
             raise ValueError('Unrecognized File Format')
-    # def AlignTimestamps(self,obj1,obj2,thresh=0.001):
-    #     '''
-    #     Goes through two datasets and matches the datapoints of each with respect to time
-    #     Uses a threshold to match timestamps (two timesstamps at effectively the same time may not be identical)
-    #     Inputs:
-    #         obj1 : data object
-    #         obj2 : data object
-    #     Outputs:
-    #         out1_data : numpy array
-    #         out2_data : numpy array
-    #     '''
-        
-        
+            
     def IV(self):
         if exists(self.current.filepath) and exists(self.voltage.filepath):
             #ensure the required data exists
@@ -179,14 +169,32 @@ class DataProcessor:
             return self.current.data,self.voltage.data
         else:
             print('Could not generate IV plot for '+self.base_path+ ' due to missing files')
+            return [],[]
+        
     def FV(self):
         if exists(self.force.filepath) and exists(self.voltage.filepath):
             #ensure the required data exists
             self.ProcessVoltage() 
             self.ProcessForce()
-            
+            # must align timestamps from force sensor to timestamps in the voltage data
+            # voltage data should be significantly more dense than force data
+            thresh = 0.01
+            v_ts = np.copy(self.voltage.timestamps)
+            v    = np.copy(self.voltage.data)
+            vout = np.array([])
+            fout = np.array([])
+            for i,ts in enumerate(self.force.timestamps):
+                #get the voltage points at this time
+                valid_voltages_idx = np.logical_and((v_ts>=ts-thresh),(v_ts<=ts+thresh))
+                if np.max(valid_voltages_idx):
+                    #average the voltage
+                    vout = np.append(vout,np.average(v[valid_voltages_idx]))
+                    fout = np.append(fout,self.force.data[i])
+            return fout,vout
         else:
             print('Could not generate FV plot for '+self.base_path+ ' due to missing files')
+            return [],[]
+        
     def BV(self):
         if exists(self.balance.filepath) and exists(self.balance_v.filepath):
             #ensure the required data exists
@@ -197,6 +205,8 @@ class DataProcessor:
             return self.balance.data,self.balance_v.data
         else:
             print('Could not generate BV plot for '+self.base_path+ ' due to missing files')
+            return [],[]
+        
     def AV(self):
         if exists(self.anemometer.filepath) and exists(self.voltage.filepath):
             #ensure the required data exists
@@ -208,6 +218,8 @@ class DataProcessor:
             return self.anemometer.data,self.voltage.data
         else:
             print('Could not generate AV plot for '+self.base_path+ ' due to missing files')
+            return [],[]
+        
     def XYA(self,writer=None):
         if exists(self.stage.filepath) and exists(self.anemometer.filepath):
             #ensure the required data exists
@@ -236,7 +248,6 @@ class DataProcessor:
                 
                 anem_avg = np.average(anem)
                 anem_std = np.std(anem)
-                print(anem_avg)
                 x = xy[0][0]
                 y = xy[0][1]
                 if writer == None:
@@ -251,13 +262,17 @@ class DataProcessor:
                     return out_x,out_y,out_anem_avg,out_anem_std
         else:
             print('Could not generate XYA plot for '+self.base_path+ ' due to missing files')
+            if writer == None:
+                return [],[],[],[]
+            
     def IT(self):
         if exists(self.current.filepath):
             #ensure that the required data exists
             self.ProcessCurrent()
             return self.current.data,self.current.timestamps  
         else:
-            print('Could not generate IT plot for '+self.base_path+ ' due to missing files')         
+            print('Could not generate IT plot for '+self.base_path+ ' due to missing files')  
+            return [],[]
             
     def VT(self):
         if exists(self.voltage.filepath):
@@ -265,7 +280,9 @@ class DataProcessor:
             self.ProcessVoltage()
             return self.voltage.data,self.voltage.timestamps 
         else:
-            print('Could not generate VT plot for '+self.base_path+ ' due to missing files')    
+            print('Could not generate VT plot for '+self.base_path+ ' due to missing files')  
+            return [],[]
+        
     def AT(self):
         if exists(self.anemometer.filepath):
             #ensure that the required data exists
@@ -273,6 +290,8 @@ class DataProcessor:
             return self.anemometer.data,self.anemometer.timestamps    
         else:
             print('Could not generate AT plot for '+self.base_path+ ' due to missing files')
+            return [],[]
+        
     def FT(self):
         if exists(self.force.filepath):
             #ensure that the required data exists
@@ -280,4 +299,5 @@ class DataProcessor:
             return self.force.data,self.force.timestamps   
         else:
             print('Could not generate FT plot for '+self.base_path+ ' due to missing files') 
+            return [],[]
     

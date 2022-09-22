@@ -25,7 +25,10 @@ class DataProcessor:
         self.stage      = Data(self.base_path + '/XY Stage.csv','XY Stage',self.ProcessXYStage)
         self.balance    = Data(self.base_path + '/Balance.csv','Balance',self.ProcessBalance)
         self.balance_v  = Data(self.base_path + '/Balance Voltages.csv','Balance Voltage',self.ProcessBalanceVoltage)
-                
+        
+        self.experiment_begin_time = None
+        self.ProcessPowerSupply()
+        self.experiment_begin_time = self.supply.timestamps[0]        
         
     def ProcessCurrent(self):
         #check if the current has already been parsed
@@ -61,10 +64,8 @@ class DataProcessor:
                 scalar = 1.5
             else:
                 scalar = 2.8
-            #filter the signal because why not ()
-            filt_anemometer = ndimage.median_filter(raw_anemometer,size=5)
             # convert voltage to kV where vkv = (vsupplyout*kvmax)/vsupplymax
-            self.anemometer.data = (((filt_anemometer-e0)*scalar)/(10-e0))*velocity_range
+            self.anemometer.data = (((raw_anemometer-e0)*scalar)/(10-e0))*velocity_range
             
     def ProcessForce(self):
         #check if the force has already been parsed
@@ -147,8 +148,11 @@ class DataProcessor:
             data = df['data']
             timestamps = df['timestamps']
             file.close()
+            if self.experiment_begin_time == None:
+                ts = np.array(timestamps.values)
+            else:
+                ts   = np.array(timestamps.values) - self.experiment_begin_time
             out_data = np.array(data.values)
-            ts   = np.array(timestamps.values)
             #convert timestamp time to be wrt beginning of experiment
             out_ts = ts - ts[0] 
             #decimate the data if necessary

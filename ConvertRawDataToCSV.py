@@ -4,6 +4,10 @@ Created on Fri Jul  8 12:25:02 2022
 
 @author: Becca
 """
+
+#TODO: add check/uncheck all buttons?
+
+
 from PyQt5.QtWidgets import QWidget, QGridLayout, QLabel, QPushButton, QMainWindow, QApplication, QLineEdit, QMessageBox, QSpacerItem, QComboBox, QCheckBox,QSizePolicy
 from PyQt5.QtGui import QFont, QDoubleValidator, QIntValidator
 from PyQt5.QtCore import QSize, QTimer, Qt, pyqtSignal
